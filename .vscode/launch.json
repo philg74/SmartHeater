@@ -13,6 +13,7 @@
             "request": "launch",
             "name": "PIO Debug",
             "executable": "d:/Profiles/pguiraud/Documents/PlatformIO/Projects/SmartHeater/.pio/build/nodemcuv2/firmware.elf",
+            "projectEnvName": "nodemcuv2",
             "toolchainBinDir": "d:/Profiles/pguiraud/.platformio/packages/toolchain-xtensa/bin",
             "preLaunchTask": {
                 "type": "PlatformIO",
@@ -25,6 +26,7 @@
             "request": "launch",
             "name": "PIO Debug (skip Pre-Debug)",
             "executable": "d:/Profiles/pguiraud/Documents/PlatformIO/Projects/SmartHeater/.pio/build/nodemcuv2/firmware.elf",
+            "projectEnvName": "nodemcuv2",
             "toolchainBinDir": "d:/Profiles/pguiraud/.platformio/packages/toolchain-xtensa/bin",
             "internalConsoleOptions": "openOnSessionStart"
         }

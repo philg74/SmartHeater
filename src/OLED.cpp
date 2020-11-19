@@ -24,11 +24,35 @@ void setupOLED() {
 
 void dispTemp(String mode, boolean chauffe, float consigne, float temp) {
   Serial.println("dispTemp: Consigne = " + (String) consigne + ", température = " + temp);
+
   char c[4];
   char t[4];
+
   // converti float en texte  consigne -> c ; temp -> t 
-  dtostrf(consigne, 4, 1, c);
   dtostrf(temp, 4, 1, t);
+  dtostrf(consigne, 4, 1, c);
+
+/*   String s = "dispTemp: Consigne = ";
+  s += c[0];
+  s += c[1];
+  s += c[2];
+  s += c[3];
+  s += ", température = ";
+  s += t[0];
+  s += t[1];
+  s += t[2];
+  s += t[3];
+  Serial.println(s);
+  Serial.print("dispTemp: Consigne = ");
+  Serial.println(c);
+  Serial.print("dispTemp: température = ");
+  Serial.println(t);
+  Serial.print("Size of c: ");
+  Serial.print(sizeof(c));
+  Serial.print(" t: ");
+  Serial.print(sizeof(t));
+  Serial.println();
+ */
   // Clear the buffer
   display.clearDisplay();
   // mode

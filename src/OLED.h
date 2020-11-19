@@ -7,6 +7,6 @@
 #include <Fonts/FreeSerifItalic12pt7b.h>
 
 void setupOLED();
-void dispTemp(String mode, bool chauffe, float consigne, float temp);
+void dispTemp(String, bool, float, float);
 
 #endif // OLED_H_INCLUDED
