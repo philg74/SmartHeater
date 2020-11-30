@@ -7,7 +7,17 @@
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+String rssix(long rssi) {
+  String s;
+  s = "";
+  if (rssi > -80) { s = "."; }
+  if (rssi > -70) { s = ".."; }
+  if (rssi > -60) { s = "..."; }
+  return s;
+}
+
 void setupOLED() {
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
@@ -22,8 +32,12 @@ void setupOLED() {
   delay(2000); // Pause for 2 seconds
 }
 
-void dispTemp(String mode, boolean chauffe, float consigne, float temp) {
-  Serial.println("dispTemp: Consigne = " + (String) consigne + ", température = " + temp);
+void dispTemp(String mode, boolean chauffe, float consigne, float temp, long rssi) {
+  dispTemp(mode, chauffe, consigne, temp, true, true, rssi);
+}
+
+void dispTemp(String mode, boolean chauffe, float consigne, float temp, boolean on_mode, boolean on_consigne, long rssi) {
+  // Serial.println("dispTemp: Consigne = " + (String) consigne + ", température = " + temp);
 
   char c[4];
   char t[4];
@@ -59,25 +73,32 @@ void dispTemp(String mode, boolean chauffe, float consigne, float temp) {
   display.setTextSize(1);             // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);        // Draw white text
   display.setCursor(0,0);
-  display.println("mode : " + mode);
+  if (!on_mode) {mode = "";}
+  display.println("mode: " + mode);
+
+  display.setCursor(110,0);
+  display.println(rssix(rssi));
 
   // Etat de chauffe
   if (chauffe) {
-    display.setCursor(120,0);
+    display.setCursor(120,15);
     display.println(F("F"));
   }
 
   // Consigne
-  display.setFont(&FreeSerifItalic12pt7b);
-  display.setCursor(5,50);
-  if (consigne < 10) {
-    display.setCursor(11,50);
+  if (on_consigne) {
+    display.setFont(&FreeSerifItalic12pt7b);
+    display.setCursor(5,50);
+    if (consigne < 10) {
+      display.setCursor(11,50);
+    }
+    display.println(c);
+    display.setFont();
+    display.setTextSize(1);
+    display.setCursor(48,35);
+    display.println(F("C"));
   }
-  display.println(c);
   display.setFont();
-  display.setTextSize(1);
-  display.setCursor(48,35);
-  display.println(F("C"));
   display.setCursor(5,55);
   display.println(F("Consig."));
 
@@ -95,5 +116,32 @@ void dispTemp(String mode, boolean chauffe, float consigne, float temp) {
   display.setCursor(65,55);
   display.println(F("Temp."));
 
+  display.display();
+}
+
+void dispInfo(String version, String vdesc, String ssid, String ip, long rssi) {
+  // Serial.println("dispInfo: ssid = " + ssid);
+  // Clear the buffer
+  display.clearDisplay();
+  // mode
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setFont(&FreeSerifItalic12pt7b);
+  display.setCursor(0,15);
+  display.println("SmartHeater");
+  display.setFont();
+  display.setTextSize(1);
+  display.setCursor(0,20);
+  display.println("version: " + version);
+  display.setCursor(0,30);
+  display.println(vdesc);
+  display.setCursor(0,40);
+  display.println("ssid: " + ssid);
+  display.setCursor(110,40);
+  display.println(rssix(rssi));
+  display.setCursor(0,50);
+  display.println("ip add.: " + ip);
+  display.setCursor(90,20);
+  display.print(rssi);
+  display.print("dBm");
   display.display();
 }
