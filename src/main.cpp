@@ -25,7 +25,7 @@ ESP8266WebServer server(80);
 // https://github.com/adafruit/DHT-sensor-library
 #if (UseDHT == 1)
 	#include <DHT.h>
-      #define DHTTYPE    DHT22
+      #define DHTTYPE DHT22
 #endif
 
 ////////
@@ -41,16 +41,18 @@ ESP8266WebServer server(80);
 // CONFIGURATION VARIABLES
 #define NB_DIGITALPIN 17
 #define NB_ANALOGPIN 1
-#define NB_TOTALPIN ( NB_DIGITALPIN	+ NB_ANALOGPIN)
+#define NB_TOTALPIN ( NB_DIGITALPIN	+ NB_ANALOGPIN )
 
 const uint8_t DHT_Pin = D7;
-const uint8_t LED_Pin = D4;
+const uint8_t LED_Pin = D6;
 const uint8_t HEAD_Pin = D5;
-const uint8_t BILED_Pin = D4;
-const uint8_t MODEBUTTON_Pin = D0;
-const uint8_t UPBUTTON_Pin = D6;
-const uint8_t DOWNBUTTON_Pin = D8;
+const uint8_t BILED_Pin = D0;
+const uint8_t MODEBUTTON_Pin = D8;
+const uint8_t UPBUTTON_Pin = D3;
+const uint8_t DOWNBUTTON_Pin = D4;
 
+unsigned long return_iddle_time;               // time to return in iddle mode
+unsigned long blink_time;              // time to make blinking what we are setting
 enum dspmode
 {
       IDDLE,
@@ -60,13 +62,21 @@ enum dspmode
 };
 dspmode activeMode;                    // mode actuel d'affichage 0=iddle 1=displayed info
 const uint8_t NUM_DSP_MODES = 4;
-unsigned long return_iddle_time;               // time to return in iddle mode
-unsigned long blink_time;              // time to make blinking what we are setting
+enum heatmode {
+      Off,
+      FrostFree,
+      Auto,
+      Manu,
+      Power
+};
+heatmode actHeatMode = Off;
+const uint8_t NUM_HEAT_MODES = 5;
+String heatmodeX[NUM_HEAT_MODES] = {"Off", "Hors gel", "Auto", "Manu", "Power"};
 
 boolean OKButtonState = false;         // variable for reading the pushbutton status
 
 #if (UseDHT == 1)
-	DHT myDHT(DHT_Pin, DHTTYPE);
+	DHT myDHT(DHT_Pin, DHT22);
 #endif
 
 byte swtch[NB_TOTALPIN];
@@ -144,17 +154,27 @@ void probeRead() { //Read probe
 }
 
 void updateState() { //Update heat state
-      if (setpoint > temperature + 0.5) 
-      {
-            if (swtch[HEAD_Pin]==0) {
-                  digitalWrite(HEAD_Pin, HIGH);
-                  swtch[HEAD_Pin]=1;
+      switch (actHeatMode) { 
+      case Power:
+            break;
+      case Auto:
+      case Manu:
+      case FrostFree:
+            if (setpoint > temperature + 0.5) 
+            {
+                  if (swtch[HEAD_Pin]==0) {
+                        digitalWrite(HEAD_Pin, HIGH);
+                        swtch[HEAD_Pin]=1;
+                  }
+            } else if (setpoint < temperature - 0.5) {
+                  if (swtch[HEAD_Pin]==1) {
+                        digitalWrite(HEAD_Pin, LOW);
+                        swtch[HEAD_Pin]=0;
+                  }
             }
-      } else if (setpoint < temperature - 0.5) {
-            if (swtch[HEAD_Pin]==1) {
-                  digitalWrite(HEAD_Pin, LOW);
-                  swtch[HEAD_Pin]=0;
-            }
+            break;
+      default:
+            break;
       }
 }
 
@@ -391,7 +411,7 @@ void loop() {
             digitalWrite(BILED_Pin, LOW);  // allumer build in LED
             swtch[MODEBUTTON_Pin] = HIGH;
       } else {                       // le bouton est relaché
-            if (swtch[MODEBUTTON_Pin] == HIGH) {    // on vient dde relacher le bouton
+            if (swtch[MODEBUTTON_Pin] == HIGH) {    // on vient de relacher le bouton
                   return_iddle_time = millis() + 10000;  // retourne en mode veille dans 10s
                   blink_time = millis();
             }
@@ -421,20 +441,39 @@ void loop() {
       switch (activeMode)
       {
       case IDDLE:
-            dispTemp("Normal", swtch[HEAD_Pin], setpoint, temperature, rssi);
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, rssi);
             break;
       case INFO:
             dispInfo(version, vdesc, ssid, myIpString, rssi);
             break;
       case SETMODE:
-            dispTemp("Normal", swtch[HEAD_Pin], setpoint, temperature, onoff, true, rssi);
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, onoff, true, rssi);
+            if (digitalRead(UPBUTTON_Pin) == HIGH) {
+                  if (swtch[UPBUTTON_Pin] == LOW) {
+                        actHeatMode = static_cast<heatmode>((actHeatMode + 1) % NUM_HEAT_MODES);
+                        swtch[UPBUTTON_Pin] = HIGH;
+                        return_iddle_time = millis() + 10000;
+                  }
+            } else {
+                  swtch[UPBUTTON_Pin] = LOW;
+            }
+            if (digitalRead(DOWNBUTTON_Pin) == HIGH) {
+                  if (swtch[DOWNBUTTON_Pin] == LOW) {
+                        actHeatMode = static_cast<heatmode>((actHeatMode - 1 + NUM_HEAT_MODES) % NUM_HEAT_MODES);
+                        swtch[DOWNBUTTON_Pin] = HIGH;
+                        return_iddle_time = millis() + 10000;
+                  }
+            } else {
+                  swtch[DOWNBUTTON_Pin] = LOW;
+            }
             break;
       case SETTEMP:
-            dispTemp("Normal", swtch[HEAD_Pin], setpoint, temperature, true, onoff, rssi);
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, true, onoff, rssi);
             if (digitalRead(UPBUTTON_Pin) == HIGH) {
                   if (swtch[UPBUTTON_Pin] == LOW) {
                         setpoint += 0.5;
                         swtch[UPBUTTON_Pin] = HIGH;
+                        return_iddle_time = millis() + 10000;
                   }
             } else {
                   swtch[UPBUTTON_Pin] = LOW;
@@ -443,13 +482,14 @@ void loop() {
                   if (swtch[DOWNBUTTON_Pin] == LOW) {
                         setpoint -= 0.5;
                         swtch[DOWNBUTTON_Pin] = HIGH;
+                        return_iddle_time = millis() + 10000;
                   }
             } else {
                   swtch[DOWNBUTTON_Pin] = LOW;
             }
             break;
       default:
-            dispTemp("Normal", swtch[HEAD_Pin], setpoint, temperature, rssi);
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, rssi);
             break;
       }
 }
