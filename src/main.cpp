@@ -57,7 +57,7 @@ enum dspmode
 {
       IDDLE,
       SETMODE,
-      SETTEMP,
+      SETPOINT,
       INFO
 };
 dspmode activeMode;                    // mode actuel d'affichage 0=iddle 1=displayed info
@@ -549,11 +549,15 @@ void loop() {
                   swtch[DOWNBUTTON_Pin] = LOW;
             }
             break;
-      case SETTEMP:
+      case SETPOINT:
             display(true, onoff);
             if (digitalRead(UPBUTTON_Pin) == HIGH) {
                   if (swtch[UPBUTTON_Pin] == LOW) {
-                        setpoint += 0.5;
+                        if (actHeatMode == Power) {
+                              setpower += 10;
+                        } else {
+                              setpoint += 0.5;
+                        }
                         swtch[UPBUTTON_Pin] = HIGH;
                         return_iddle_time = millis() + 10000;
                   }
@@ -562,7 +566,11 @@ void loop() {
             }
             if (digitalRead(DOWNBUTTON_Pin) == HIGH) {
                   if (swtch[DOWNBUTTON_Pin] == LOW) {
-                        setpoint -= 0.5;
+                        if (actHeatMode == Power) {
+                              setpower -= 10;
+                        } else {
+                              setpoint -= 0.5;
+                        }
                         swtch[DOWNBUTTON_Pin] = HIGH;
                         return_iddle_time = millis() + 10000;
                   }

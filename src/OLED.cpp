@@ -151,19 +151,22 @@ void dispPower(String mode, boolean chauffe, int consigne, boolean on_mode, bool
 
   // Consigne
   if (on_consigne) {
-    display.setFont(&FreeSerifItalic12pt7b);
+    display.setFont(&FreeSerifItalic18pt7b);
     display.setCursor(5,50);
-    if (consigne < 10) {
-      display.setCursor(11,50);
+    if (consigne < 100) {
+      display.setCursor(23,50);
+      if (consigne < 10) {
+        display.setCursor(41,50);
+      }
     }
     display.println(consigne);
-    display.setFont();
-    display.setTextSize(1);
-    display.setCursor(48,35);
+    display.setFont(&FreeSerifItalic12pt7b);
+    display.setCursor(65,50);
     display.println(F("%"));
   }
   display.setFont();
-  display.setCursor(5,55);
+  display.setTextSize(1);
+  display.setCursor(15,55);
   display.println(F("Consig."));
 
   display.display();
