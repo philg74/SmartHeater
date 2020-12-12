@@ -9,6 +9,9 @@
 void setupOLED();
 void dispTemp(String, bool, float, float, long);
 void dispTemp(String, bool, float, float, bool, bool, long);
+void dispPower(String, bool, int, long);
+void dispPower(String, bool, int, bool, bool, long);
 void dispInfo(String, String, String, String, long);
+void dispMessage(String);
 
 #endif // OLED_H_INCLUDED

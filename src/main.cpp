@@ -7,8 +7,8 @@
 
 ////////
 // Version of this project
-const char* version = "V1.1";
-const char* vdesc = "with buttons";
+const char* version = "V1.2";
+const char* vdesc = "manage power mode";
 
 ////////
 // WiFi
@@ -62,6 +62,7 @@ enum dspmode
 };
 dspmode activeMode;                    // mode actuel d'affichage 0=iddle 1=displayed info
 const uint8_t NUM_DSP_MODES = 4;
+
 enum heatmode {
       Off,
       FrostFree,
@@ -83,9 +84,13 @@ byte swtch[NB_TOTALPIN];
 
 // valeurs courantes
 float setpoint;
+uint8_t setpower;
 float temperature = 20;
 float humidity = 50;
 boolean readOK = false;
+
+unsigned long HeatNextChange = 0;         // when in power mode
+unsigned long cycleDuration = 1 * 60 * 1000;   // cycle duration in power mode
 
 unsigned long ProbeNextRead = millis();
 unsigned long LastReadOK = 0;
@@ -156,6 +161,21 @@ void probeRead() { //Read probe
 void updateState() { //Update heat state
       switch (actHeatMode) { 
       case Power:
+            if (millis() > HeatNextChange) {
+                  if (swtch[HEAD_Pin]==0) {
+                        digitalWrite(HEAD_Pin, HIGH);
+                        swtch[HEAD_Pin]=1;
+                        // Serial.print("[updateState] Heat ON for: ");
+                        // Serial.println(timef(cycleDuration * setpower / 100));
+                        HeatNextChange = millis() + cycleDuration * setpower / 100;
+                  } else {
+                        digitalWrite(HEAD_Pin, LOW);
+                        swtch[HEAD_Pin]=0;
+                        // Serial.print("[updateState] Heat OFF for: ");
+                        // Serial.println(timef(cycleDuration * (100 - setpower) / 100));
+                        HeatNextChange = millis() + cycleDuration * (100 - setpower) / 100;
+                  }
+            }
             break;
       case Auto:
       case Manu:
@@ -192,18 +212,18 @@ void statistic() {
 
       // stockage toutes les 10 mn dans une nouvelle ligne du tableau
       String time = timef(millis());
-      Serial.println("time= " + time);
+      Serial.println("[statistic] time= " + time);
       unsigned long m = ((float) millis() ) / (1000.0 * 60 * SCALE);
-      Serial.printf("millis= %lu, scale=%d, m= %lu \n", millis(), (1000 * 60 * SCALE), m);
+      // Serial.printf("[statistic] millis= %lu, scale=%d, m= %lu \n", millis(), (1000 * 60 * SCALE), m);
       uint8_t i = m % HISTDEPTH;
-      Serial.printf("i= %d, nbStat= %d, nbReadError= %d, nbPowerOn= %d.\n", i, nbStat, nbReadError, nbPowerOn);
+      // Serial.printf("[statistic] i= %d, nbStat= %d, nbReadError= %d, nbPowerOn= %d.\n", i, nbStat, nbReadError, nbPowerOn);
       if (i != l) { // changement de tranche, on stocke
             avgBy10min[l].time = time;
             avgBy10min[l].nbStat = nbStat;
             avgBy10min[l].nbReadError = nbReadError;
             float powerOn = nbPowerOn * 100.0 / nbStat;
             avgBy10min[l].powerOn = (uint8_t) powerOn;
-            Serial.printf("===> nb= %d, error= %d, power= %d.\n", avgBy10min[l].nbStat, avgBy10min[l].nbReadError, avgBy10min[l].powerOn);
+            Serial.printf("[statistic] ===> nb= %d, error= %d, power= %d.\n", avgBy10min[l].nbStat, avgBy10min[l].nbReadError, avgBy10min[l].powerOn);
             avgBy10min[l].consigne = sumCons / nbStat;
             avgBy10min[l].temperature = sumTemp / nbStat;
             l = i;
@@ -219,8 +239,13 @@ void getData() { //Handler get data from heater
       Serial.println(F("=== getData ==="));
 
       String message = "{";
-      message += "\"Wifi\": \""; message += ssid; message += '"';
+      message += "\"Version\": \""; message += version; message += '"';
+      message += ",\"Version description\": \""; message += vdesc; message += '"';
+      message += ",\"Wifi\": \""; message += ssid; message += '"';
+      message += ",\"RSSI\": "; message += rssi;
       message += ",\"timeSinceBoot\": \""; message += timef(millis()); message += '"';
+      message += ",\"mode\": \""; message += heatmodeX[actHeatMode]; message += '"';
+      message += ",\"setpower\": "; message += setpower;
       message += ",\"setpoint\": "; message += setpoint;
       message += ",\"temperature\": "; message += temperature;
       message += ",\"humidity\": "; message += humidity;
@@ -258,17 +283,42 @@ void setOrder() { //Handler order of a new set point for temperature
  
       Serial.println(F("=== setOrder ==="));
 
-      if (server.hasArg("setpoint")== false) {
- 
-            server.send(200, "text/plain", "setpoint not received");
-            return;
- 
+      // Setting the Mode, if not, it doesn't change
+      if (server.hasArg("mode")) {
+            String s = server.arg("mode");
+            for (int i = 0; i < NUM_HEAT_MODES; i++) {
+                  if (s.equals(heatmodeX[i])) {
+                        actHeatMode = (heatmode) i;
+                  }
+            }
       }
- 
-      setpoint = server.arg("setpoint").toFloat();
 
-      String message = "temperature order set to: ";
+      // Setting temp point, mandatory for Auto et Manu modes
+      if (server.hasArg("setpoint")) {
+            setpoint = server.arg("setpoint").toFloat();
+      } else {
+            if (actHeatMode == Auto || actHeatMode == Manu) {
+                  server.send(200, "text/plain", "setpoint not received");
+                  return;
+            }
+      }
+
+      // Setting power, mandatory for Power mode
+      if (server.hasArg("setpower")) {
+            setpower = server.arg("setpower").toFloat();
+      } else {
+            if (actHeatMode == Power) {
+                  server.send(200, "text/plain", "setpower not received");
+                  return;
+            }
+      }
+
+      String message = "mode set to: ";
+      message += heatmodeX[actHeatMode];
+      message += "\ntemperature order set to: ";
       message += setpoint;
+      message += "\npower set to: ";
+      message += setpower;
  
       server.send(200, "text/plain", message);
       Serial.println(message);
@@ -296,59 +346,91 @@ void handleBody() { //Handler for the body path
       Serial.println(message);
 }
 
+void handleNotFound() { //Handler for no path found
+ 
+      Serial.println(F("=== handleNotFound ==="));
+
+      String message = "ERROR: Path not found\n";
+ 
+      server.send(404, "text/plain", message);
+      Serial.println(message);
+}
+
+void display(bool on_mode, bool on_consigne) {
+      if (actHeatMode == Power) {
+            dispPower(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpower, on_mode, on_consigne, rssi);      
+      } else {
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, on_mode, on_consigne, rssi);
+      }
+}
+
+void display() {
+      if (actHeatMode == Power) {
+            dispPower(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpower, rssi);      
+      } else {
+            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, rssi);
+      }
+}
+
 void setup() {
 
-    Serial.begin(115200);
-    Serial.setTimeout(5); // Timeout 5ms
+      Serial.begin(115200);
+      Serial.setTimeout(5); // Timeout 5ms
 
-    Serial.println(F("SmartHeater is here."));
-    Serial.println(F("===================="));
+      activeMode = IDDLE;
+      setupOLED();
 
-    wifi.addAP("Bbox-4C18966A", "bienvenue");
-    wifi.addAP("Linksys", "bienvenue");
-    wifi.addAP("NETGEAR22", "Une0range");
- 
-    Serial.println(F("Waiting to connect..."));
-    while (wifi.run() != WL_CONNECTED) {  //Wait for connection
-        delay(500);
-        Serial.print(F("."));
-    }
-    Serial.println(F(""));
-    Serial.print(F("Connected to "));
-    ssid = WiFi.SSID();
-    Serial.println(ssid);
-    NextReconnect = millis() + 10000;
+      dispMessage(F("SmartHeater is here."));
+      dispMessage(F("===================="));
 
-    IPAddress myIp = WiFi.localIP();
-    sprintf(myIpString, "%d.%d.%d.%d", myIp[0], myIp[1], myIp[2], myIp[3]);
+      wifi.addAP("Bbox-4C18966A", "bienvenue");
+      wifi.addAP("Linksys", "bienvenue");
+      wifi.addAP("NETGEAR22", "Une0range");
 
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());  //Print the local IP
- 
-    pinMode(LED_Pin, OUTPUT);
-    pinMode(HEAD_Pin, OUTPUT);
-    pinMode(BILED_Pin, OUTPUT);
-    pinMode(MODEBUTTON_Pin, INPUT);
-    pinMode(UPBUTTON_Pin, INPUT);
-    pinMode(DOWNBUTTON_Pin, INPUT);
+      String msg = F("Connecting ...");
+      dispMessage(msg);
+      delay(500);
+      while (wifi.run() != WL_CONNECTED) {  //Wait for connection
+            delay(250);
+            Serial.print(F("."));
+      }
+      ssid = WiFi.SSID();
+      msg = F("Connected to ");
+      msg += ssid;
+      dispMessage(msg);
 
-    Serial.print(F("Create dht object on "));
-    Serial.println(DHT_Pin);
-    myDHT.begin();
+      NextReconnect = millis() + 10000;
 
-    activeMode = IDDLE;
-    setupOLED();
+      IPAddress myIp = WiFi.localIP();
+      sprintf(myIpString, "%d.%d.%d.%d", myIp[0], myIp[1], myIp[2], myIp[3]);
 
-    setpoint = 18.0;  //init consigne à 18 C
- 
-    server.on("/body", handleBody); // Associate the handler function to the path
-    server.on("/order", HTTP_GET, setOrder); //
-    server.on("/data", HTTP_GET, getData); //
-    server.on("/history", HTTP_GET, getHistory); //
- 
-    server.begin(); //Start the server
-    Serial.println("Server listening");
+      dispMessage(F("IP address: "));
+      dispMessage(myIpString); //Print the local IP
 
+      pinMode(LED_Pin, OUTPUT);
+      pinMode(HEAD_Pin, OUTPUT);
+      pinMode(BILED_Pin, OUTPUT);
+      pinMode(MODEBUTTON_Pin, INPUT);
+      pinMode(UPBUTTON_Pin, INPUT);
+      pinMode(DOWNBUTTON_Pin, INPUT);
+
+      dispMessage(F("Create dht object on "));
+      dispMessage((String) DHT_Pin);
+      myDHT.begin();
+
+      setpoint = 18.0;  //init consigne à 18 C
+      setpower = 0;
+
+      server.on("/body", handleBody); // Associate the handler function to the path
+      server.on("/order", HTTP_GET, setOrder); //
+      server.on("/data", HTTP_GET, getData); //
+      server.on("/history", HTTP_GET, getHistory); //
+      server.onNotFound(handleNotFound);
+
+      server.begin(); //Start the server
+      dispMessage("Server listening");
+
+      delay(5000);
 }
 
 void loop() {
@@ -359,7 +441,7 @@ void loop() {
       // reconnect every xs for the best network
       if (millis() > NextReconnect) {
             Serial.println();
-            Serial.print(F("Waiting to RE-connect..."));
+            Serial.print(F("[loop] Waiting to RE-connect..."));
             if (wifi.run() != WL_CONNECTED) {
                   delay(500);
                   Serial.print(F("."));
@@ -369,7 +451,7 @@ void loop() {
             Serial.print(F("Connected to "));
             Serial.println(ssid);
 
-            NextReconnect = millis() + 10000;
+            NextReconnect = millis() + 60000;
       }
       server.handleClient(); //Handling of incoming requests
       
@@ -441,13 +523,13 @@ void loop() {
       switch (activeMode)
       {
       case IDDLE:
-            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, rssi);
+            display();
             break;
       case INFO:
             dispInfo(version, vdesc, ssid, myIpString, rssi);
             break;
       case SETMODE:
-            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, onoff, true, rssi);
+            display(onoff, true);
             if (digitalRead(UPBUTTON_Pin) == HIGH) {
                   if (swtch[UPBUTTON_Pin] == LOW) {
                         actHeatMode = static_cast<heatmode>((actHeatMode + 1) % NUM_HEAT_MODES);
@@ -468,7 +550,7 @@ void loop() {
             }
             break;
       case SETTEMP:
-            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, true, onoff, rssi);
+            display(true, onoff);
             if (digitalRead(UPBUTTON_Pin) == HIGH) {
                   if (swtch[UPBUTTON_Pin] == LOW) {
                         setpoint += 0.5;
@@ -489,7 +571,7 @@ void loop() {
             }
             break;
       default:
-            dispTemp(heatmodeX[actHeatMode], swtch[HEAD_Pin], setpoint, temperature, rssi);
+            display();
             break;
       }
 }

@@ -30,6 +30,11 @@ void setupOLED() {
   // the library initializes this with an Adafruit splash screen.
   display.display();
   delay(2000); // Pause for 2 seconds
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setFont();
+  display.setTextSize(1);
+  display.setCursor(0,0);
 }
 
 void dispTemp(String mode, boolean chauffe, float consigne, float temp, long rssi) {
@@ -119,6 +124,51 @@ void dispTemp(String mode, boolean chauffe, float consigne, float temp, boolean 
   display.display();
 }
 
+void dispPower(String mode, boolean chauffe, int consigne, long rssi) {
+  dispPower(mode, chauffe, consigne, true, true, rssi);
+}
+
+void dispPower(String mode, boolean chauffe, int consigne, boolean on_mode, boolean on_consigne, long rssi) {
+  // Serial.println("dispTemp: Consigne = " + (String) consigne + ", température = " + temp);
+
+  // Clear the buffer
+  display.clearDisplay();
+  // mode
+  display.setTextSize(1);             // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setCursor(0,0);
+  if (!on_mode) {mode = "";}
+  display.println("mode: " + mode);
+
+  display.setCursor(110,0);
+  display.println(rssix(rssi));
+
+  // Etat de chauffe
+  if (chauffe) {
+    display.setCursor(120,15);
+    display.println(F("F"));
+  }
+
+  // Consigne
+  if (on_consigne) {
+    display.setFont(&FreeSerifItalic12pt7b);
+    display.setCursor(5,50);
+    if (consigne < 10) {
+      display.setCursor(11,50);
+    }
+    display.println(consigne);
+    display.setFont();
+    display.setTextSize(1);
+    display.setCursor(48,35);
+    display.println(F("%"));
+  }
+  display.setFont();
+  display.setCursor(5,55);
+  display.println(F("Consig."));
+
+  display.display();
+}
+
 void dispInfo(String version, String vdesc, String ssid, String ip, long rssi) {
   // Serial.println("dispInfo: ssid = " + ssid);
   // Clear the buffer
@@ -144,4 +194,12 @@ void dispInfo(String version, String vdesc, String ssid, String ip, long rssi) {
   display.print(rssi);
   display.print("dBm");
   display.display();
+}
+
+void dispMessage(String msg) {
+  // Serial.println("dispInfo: ssid = " + ssid);
+  Serial.println(msg);
+  display.println(msg);
+  display.display();
+  delay(500);
 }
