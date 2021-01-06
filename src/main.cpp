@@ -2,13 +2,13 @@
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266WebServer.h>
 
-#define UseDHT 1
-#define UseDS18x20 0
+#define UseDHT 0
+#define UseDS18x20 1
 
 ////////
 // Version of this project
-const char* version = "V1.2";
-const char* vdesc = "manage power mode";
+const char* version = "V1.3";
+const char* vdesc = "Sonde DS18B20";
 
 ////////
 // WiFi
@@ -33,6 +33,16 @@ ESP8266WebServer server(80);
 // https://github.com/PaulStoffregen/OneWire
 #if (UseDS18x20 == 1)
 	#include <OneWire.h>
+      #include <DallasTemperature.h>
+
+      // GPIO where the DS18B20 is connected to
+      const int oneWireBus = 13;     
+
+      // Setup a oneWire instance to communicate with any OneWire devices
+      OneWire oneWire(oneWireBus);
+
+      // Pass our oneWire reference to Dallas Temperature sensor 
+      DallasTemperature sensors(&oneWire);
 #endif
 
 #include <OLED.h>
@@ -90,7 +100,7 @@ float humidity = 50;
 boolean readOK = false;
 
 unsigned long HeatNextChange = 0;         // when in power mode
-unsigned long cycleDuration = 1 * 60 * 1000;   // cycle duration in power mode
+unsigned long cycleDuration = 10 * 60 * 1000;   // cycle duration in power mode
 
 unsigned long ProbeNextRead = millis();
 unsigned long LastReadOK = 0;
@@ -135,11 +145,21 @@ String timef(unsigned long t) {
 }
 
 void probeRead() { //Read probe
+
       // Lecture température et humidité
       float newHumidity = 0;
-      newHumidity = myDHT.readHumidity();
       float newTemperature = 0;
+
+#if (UseDHT == 1)
+      newHumidity = myDHT.readHumidity();
       newTemperature = myDHT.readTemperature();
+#endif
+
+#if (UseDS18x20 == 1)
+      sensors.requestTemperatures(); 
+      newTemperature = sensors.getTempCByIndex(0);
+#endif
+
       if (!isnan(newTemperature)) { 
             temperature = newTemperature;
             LastReadOK = millis();
@@ -231,6 +251,8 @@ void statistic() {
             nbStat = 0;
             nbReadError = 0;
             nbPowerOn = 0;
+            sumCons = 0;
+            sumTemp = 0;
       }
 }
 
@@ -264,6 +286,7 @@ void getHistory() { //Handler get history from heater
       for (int i = 0; i < HISTDEPTH; i++) {
             uint8_t j = ( i + l ) % HISTDEPTH;
             Serial.printf(" histo l=%d  i=%d  j=%d \n", l, i, j);
+            if (i > 0) { message += ", "; }
             message += "{";
             message += "\"timeSinceBoot\" : \""; message += avgBy10min[j].time; message += '"';
             message += ",\"nbLoop\" : "; message += avgBy10min[j].nbStat;
@@ -416,7 +439,15 @@ void setup() {
 
       dispMessage(F("Create dht object on "));
       dispMessage((String) DHT_Pin);
+
+#if (UseDHT == 1)
       myDHT.begin();
+#endif
+
+#if (UseDS18x20 == 1)
+      // Start the DS18B20 sensor
+      sensors.begin();
+#endif
 
       setpoint = 18.0;  //init consigne à 18 C
       setpower = 0;
