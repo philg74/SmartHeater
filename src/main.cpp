@@ -7,7 +7,7 @@
 
 ////////
 // Version of this project
-const char* version = "V1.3";
+const char* version = "V1.31";
 const char* vdesc = "Sonde DS18B20";
 
 ////////
@@ -34,15 +34,6 @@ ESP8266WebServer server(80);
 #if (UseDS18x20 == 1)
 	#include <OneWire.h>
       #include <DallasTemperature.h>
-
-      // GPIO where the DS18B20 is connected to
-      const int oneWireBus = 13;     
-
-      // Setup a oneWire instance to communicate with any OneWire devices
-      OneWire oneWire(oneWireBus);
-
-      // Pass our oneWire reference to Dallas Temperature sensor 
-      DallasTemperature sensors(&oneWire);
 #endif
 
 #include <OLED.h>
@@ -53,9 +44,12 @@ ESP8266WebServer server(80);
 #define NB_ANALOGPIN 1
 #define NB_TOTALPIN ( NB_DIGITALPIN	+ NB_ANALOGPIN )
 
-const uint8_t DHT_Pin = D7;
-const uint8_t LED_Pin = D6;
-const uint8_t HEAD_Pin = D5;
+// GPIO where the DS18B20 is connected to
+const int oneWireBus = D5;     
+// 
+const uint8_t DHT_Pin = D5;
+const uint8_t LED_Pin = D7;
+const uint8_t HEAD_Pin = D6;
 const uint8_t BILED_Pin = D0;
 const uint8_t MODEBUTTON_Pin = D8;
 const uint8_t UPBUTTON_Pin = D3;
@@ -80,7 +74,7 @@ enum heatmode {
       Manu,
       Power
 };
-heatmode actHeatMode = Off;
+heatmode actHeatMode = Auto;
 const uint8_t NUM_HEAT_MODES = 5;
 String heatmodeX[NUM_HEAT_MODES] = {"Off", "Hors gel", "Auto", "Manu", "Power"};
 
@@ -88,6 +82,14 @@ boolean OKButtonState = false;         // variable for reading the pushbutton st
 
 #if (UseDHT == 1)
 	DHT myDHT(DHT_Pin, DHT22);
+#endif
+
+#if (UseDS18x20 == 1)
+      // Setup a oneWire instance to communicate with any OneWire devices
+      OneWire oneWire(oneWireBus);
+
+      // Pass our oneWire reference to Dallas Temperature sensor 
+      DallasTemperature sensors(&oneWire);
 #endif
 
 byte swtch[NB_TOTALPIN];
@@ -118,8 +120,8 @@ typedef struct average
       uint8_t nbStat;
       uint8_t nbReadError;
       uint8_t powerOn;
-      uint8_t temperature;
-      uint8_t consigne;
+      float temperature;
+      float consigne;
 } average;
 
 // tableaux pour moyenne par ?
@@ -153,13 +155,6 @@ void probeRead() { //Read probe
 #if (UseDHT == 1)
       newHumidity = myDHT.readHumidity();
       newTemperature = myDHT.readTemperature();
-#endif
-
-#if (UseDS18x20 == 1)
-      sensors.requestTemperatures(); 
-      newTemperature = sensors.getTempCByIndex(0);
-#endif
-
       if (!isnan(newTemperature)) { 
             temperature = newTemperature;
             LastReadOK = millis();
@@ -168,6 +163,20 @@ void probeRead() { //Read probe
             readOK = false;
       }
       if (!isnan(newHumidity)) { humidity = newHumidity; }
+#endif
+
+#if (UseDS18x20 == 1)
+      sensors.requestTemperatures(); 
+      newTemperature = sensors.getTempCByIndex(0);
+      if (newTemperature > -120) {
+            temperature = newTemperature;
+            LastReadOK = millis();
+            readOK = true;
+      } else {
+            readOK = false;
+      }
+#endif
+
 /* 
       Serial.print(F("probeRead: Sensor T° :"));
       Serial.print(F("\t"));
